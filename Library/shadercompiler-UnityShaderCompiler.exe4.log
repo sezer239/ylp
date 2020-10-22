@@ -1,0 +1,8 @@
+Base path: 'E:/Unity/Hub/Editor/2019.4.5f1/Editor/Data', plugins path 'E:/Unity/Hub/Editor/2019.4.5f1/Editor/Data/PlaybackEngines'
+Cmd: initializeCompiler
+Cmd: compileComputeKernel
+  error: 1 plat 4 at ComputeShader.compute(137): signed/unsigned mismatch, unsigned assumed
+  error: 1 plat 4 at ComputeShader.compute(138): signed/unsigned mismatch, unsigned assumed
+  error: 1 plat 4 at ComputeShader.compute(139): signed/unsigned mismatch, unsigned assumed
+  error: 2 plat 4 at ComputeShader.compute(169): invalid subscript 'real'
+  api=4 insize=5185 outsize=0 ok=0

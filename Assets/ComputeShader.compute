@@ -1,0 +1,149 @@
+﻿// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSMain
+
+#define PI 3.14159265
+#define TWOPI (2.0*PI)
+
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+RWTexture2D<float4> result;
+Texture2D<float4> real;
+
+int point_size;
+float1 coef;
+
+int1 point_x[16];
+int1 point_y[16];
+float1 point_R[16];
+float1 point_K[16];
+float4 point_C[16];
+float1 point_THETA[16];
+int1 point_x2[16];
+int1 point_y2[16];
+
+#define cx_mul(a, b) float2(a.x*b.x-a.y*b.y, a.x*b.y+a.y*b.x)
+//#define cx_div(a, b) (cx_mul(a , cx_inv(b)))
+#define cx_div(a, b) float2(((a.x*b.x+a.y*b.y)/(b.x*b.x+b.y*b.y)),((a.y*b.x-a.x*b.y)/(b.x*b.x+b.y*b.y)))
+#define cx_modulus(a) length(a)
+#define cx_conj(a) float2(a.x,-a.y)
+#define cx_arg(a) float2(a.y,a.x)
+#define cx_sin(a) float2(sin(a.x) * cosh(a.y), cos(a.x) * sinh(a.y))
+#define cx_cos(a) float2(cos(a.x) * cosh(a.y), -sin(a.x) * sinh(a.y))
+//#define cx_tan cx_div(cx_sin(a), cx_cos(a))
+
+float2 cx_add(float2 a, float2 b) { return a+b;} // is redundant
+float2 cx_sub(float2 a, float2 b) { return a-b;} // is redundant
+//float2 cx_mul(float2 a, float2 b) { return float2(a.x*b.x-a.y*b.y, a.x*b.y+a.y*b.x);}
+//vec2 cx_div(vec2 a, vec2 b) { return cx_mul(a , cx_inv(b));}
+//float cx_modulus(vec2 a) {return sqrt(a.x*a.x+a.y*a.y);}
+//float cx_modulus(vec2 a) {return length(a); }
+//float cx_arg(vec2 a) {return atan2(a.y,a.x);}
+
+float2 cx_sqrt(float2 a)
+{
+    float r = sqrt(a.x * a.x + a.y * a.y);
+    float rpart = sqrt(0.5 * (r + a.x));
+    float ipart = sqrt(0.5 * (r - a.x));
+    if (a.y < 0.0) ipart = -ipart;
+    return float2(rpart, ipart);
+}
+
+//vec2 cx_sin(vec2 a) {return vec2(sin(a.x) * cosh(a.y), cos(a.x) * sinh(a.y));}
+//vec2 cx_cos(vec2 a) {return vec2(cos(a.x) * cosh(a.y), -sin(a.x) * sinh(a.y));}
+float2 cx_tan(float2 a) { return cx_div(cx_sin(a), cx_cos(a)); }
+
+float2 cx_log(float2 a)
+{
+    float rpart = sqrt((a.x * a.x) + (a.y * a.y));
+    float ipart = atan2(a.y, a.x);
+    if (ipart > PI) ipart = ipart - (2.0 * PI);
+    return float2(log(rpart), ipart);
+}
+
+float2 cx_mobius(float2 a)
+{
+    float2 c1 = a - float2(1.0, 0.0);
+    float2 c2 = a + float2(1.0, 0.0);
+    return cx_div(c1, c2);
+}
+
+float2 cx_z_plus_one_over_z(float2 a)
+{
+    return a + cx_div(float2(1.0,0.0), a);
+    //return cx_add(a, cx_div(vec2(1.0,0.0), a));
+}
+
+float2 cx_z_squared_plus_c(float2 z, float2 c)
+{
+    return cx_mul(z, z) + c;
+}
+
+float2 cx_sin_of_one_over_z(float2 z)
+{
+    return cx_sin(cx_div(float2(1.0,0.0), z));
+}
+
+[numthreads(8,8,1)]
+void CSMain(uint3 id : SV_DispatchThreadID)
+{
+    //result[id.xy] = real[id.xy];
+
+    float2 C = {id.x, id.y};
+    float2 T = float2(0,0);;
+    float2 Ti = float2(0,0);
+    float2 Tp = float2(0,0);
+    float2 Cp = float2(0,0);
+
+    float1 d = 0;
+    d = abs(id.x);
+    if (d > abs(id.x - 1920)) d = abs(id.x - 1920);
+    if (d > abs(id.y - 1080)) d = abs(id.y - 1080);
+    if (d > abs(id.y)) d = abs(id.y);
+
+    float2 db = exp(float2(-1 * d / coef, 0));
+
+    Tp = Tp + db;
+    Ti = Ti + cx_mul(C , db);
+
+    for (int i = 0; i < point_size; i++)
+    {
+        float2 Ai = float2(cos(point_THETA[i]) / point_K[i], sin(point_THETA[i]) / point_K[i]);
+        float2 Ci = float2(point_x[i], point_y[i]);
+        float2 C2i = float2(point_x2[i], point_y2[i]);
+
+        float a = pow((id.x - point_x[i]), 2);
+        float b = pow((id.y - point_y[i]), 2);
+        float1 distance = abs((sqrt( a + b) - point_R[i]) / coef);
+        if (distance < 0.0) distance = 0.0;
+        
+        float2 di = exp(float2(-1 * distance, 0));
+        Tp = Tp + di;
+        float2 Vi = cx_mul((C - Ci) , Ai);
+        Vi = Vi + C2i;
+        Ti = Ti + cx_mul(Vi , di);
+    }
+    
+    if (length(Tp) == 0)
+        Cp = float2(0,0);
+    else
+        Cp = cx_div(Ti , Tp);
+
+    float xs = (float)Cp.x;
+    float ys = (float)Cp.y;
+    float xx = 0;
+    float yy = 0;
+
+    if (xs > 0) xx = ((int)xs) % 1920;   
+    else {
+        xx = ( - (int)xs) % 1920;  
+        xx = 1920 - xx - 1;
+    }
+    if (ys > 0) yy = ((int)ys) % 1080;  
+    else {
+        yy = ( - (int)ys) % 1080; 
+        yy = 1080 - yy - 1;
+    }
+    
+    int2 p = int2(xx, yy);
+    result[id.xy] = real[p.xy];
+}
